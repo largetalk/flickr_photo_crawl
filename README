@@ -1,0 +1,1 @@
+scrapy crawl flickr -a username=largetalk -o scraped_data.json -t json
