@@ -8,6 +8,7 @@ from scrapy.item import Item, Field
 class FlickrPhotoCrawlItem(Item):
     # define the fields for your item here like:
     # name = Field()
+    flickr_id = Field()
     web_url = Field()
     name = Field()
     set_name = Field()
