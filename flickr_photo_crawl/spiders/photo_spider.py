@@ -35,6 +35,7 @@ class FlickrSpider(CrawlSpider):
         ]
         self.conn = sqlite3.connect('photo.db')
         self._create_table()
+        self.photo_store = PhotoStore()
 
     def _create_table(self):
         sql1 = '''
@@ -74,14 +75,18 @@ class FlickrSpider(CrawlSpider):
         self.conn.execute(sql)
         self.conn.commit()
         
-
         yield Request(url=item['ksize_url'], callback=self.parse_download)
 
 
     def parse_download(self, response):
         hxs = HtmlXPathSelector(response)
-        flickr_id = re.findall('/photos/\w+/(\d+)/sizes/k/in/photostream/', response.url)[0]
+        #flickr_id = re.findall('/photos/\w+/(\d+)/sizes/k/in/photostream/', response.url)[0]
         download_url = hxs.select("//div[@id='allsizes-photo']/img/@src").extract()[0]
+
+        yield Request(url=download_url, callback=self.real_download)
+
+    def real_download(self, response):
+        flickr_id = re.findall('/photos/\w+/(\d+)/sizes/k/in/photostream/', response.request.headers['Referer'])[0]
         cu = self.conn.cursor()
         sql = "select flickr_id, web_url, name, set_name, ksize_url from photos where flickr_id = %s" % flickr_id
         cu.execute(sql)
@@ -93,7 +98,24 @@ class FlickrSpider(CrawlSpider):
         item['name'] = row[2]
         item['set_name'] = row[3]
         item['ksize_url'] = row[4]
-        item['download_url'] = download_url
+        item['download_url'] = response.url
+        self.photo_store.save(item['name'], item['set_name'], response.body)
 
         return item
+
+from os import path
+import os
+class PhotoStore(object):
+    def __init__(self, basedir='.photos'):
+        self.basedir = basedir
+        if not path.exists(basedir):
+            os.makedirs(basedir)
+
+    def save(self, name, set_name, body):
+        if not path.exists(path.join(self.basedir, set_name)):
+            os.makedirs(path.join(self.basedir, set_name))
+        if not name.lower().endswith('.jpg'):
+            name = name + '.jpg'
+        fn = path.join(self.basedir, set_name, name)
+        open(fn, 'w').write(body)
 
